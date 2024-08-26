@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Dict
 
 import torch
-from transformers import AutoTokenizer, BitsAndBytesConfig, PreTrainedTokenizer
+from transformers import AutoTokenizer, BitsAndBytesConfig, PreTrainedTokenizer, LlamaTokenizer
 from transformers.trainer_utils import get_last_checkpoint
 
 from accelerate import Accelerator
@@ -68,7 +68,7 @@ def get_quantization_config(model_args: ModelArguments) -> BitsAndBytesConfig | 
 
 def get_tokenizer(model_args: ModelArguments, data_args: DataArguments) -> PreTrainedTokenizer:
     """Get the tokenizer for the model."""
-    tokenizer = AutoTokenizer.from_pretrained(
+    tokenizer = LlamaTokenizer.from_pretrained(
         model_args.model_name_or_path,
         revision=model_args.model_revision,
     )

@@ -5,7 +5,7 @@ import argparse
 import llm_blender
 import os
 import numpy as np
-from transformers import AutoTokenizer
+from transformers import AutoTokenizer, LlamaTokenizer
 
 def parse_arguments():
     """Parse command line arguments."""
@@ -52,7 +52,7 @@ def main(args):
     data = load_dataset(args.prompts, split="train")
 
     if "mistral" in args.model.lower():
-        tokenizer = AutoTokenizer.from_pretrained("mistralai/Mistral-7B-Instruct-v0.2")
+        tokenizer = LlamaTokenizer.from_pretrained("mistralai/Mistral-7B-Instruct-v0.2")
     elif "llama-3" in args.model.lower():
         tokenizer = AutoTokenizer.from_pretrained("meta-llama/Meta-Llama-3-8B-Instruct")
     elif "gemma-2" in args.model.lower():

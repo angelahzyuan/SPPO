@@ -1,4 +1,4 @@
-from transformers import AutoTokenizer
+from transformers import AutoTokenizer, LlamaTokenizer
 from datasets import load_dataset
 from vllm import LLM, SamplingParams
 
@@ -64,7 +64,7 @@ def main():
     data = load_dataset(args.prompts, split="train")
 
     if "mistral" in model_path.lower():
-        tokenizer = AutoTokenizer.from_pretrained("mistralai/Mistral-7B-Instruct-v0.2")
+        tokenizer = LlamaTokenizer.from_pretrained("mistralai/Mistral-7B-Instruct-v0.2")
     elif "llama-3" in model_path.lower():
         tokenizer = AutoTokenizer.from_pretrained("meta-llama/Meta-Llama-3-8B-Instruct")
     elif "gemma-2" in model_path.lower():
