@@ -76,6 +76,8 @@ def main():
     # pdb.set_trace()
     llm = LLM(
         model=model_path,
+        revision="1296dc8fd9b21e6424c9c305c06db9ae60c03ace",
+        tokenizer_revision="1296dc8fd9b21e6424c9c305c06db9ae60c03ace",
         tensor_parallel_size=args.world_size,
     )
     prompts = [apply_template(data[idx]["prompt"], tokenizer) for idx in range(len(data))]
