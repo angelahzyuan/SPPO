@@ -2,10 +2,11 @@
 iter_num=3
 LORA_R=8 # size of LoRA rank - one of 8, 16, 32, 64
 USE_LORA="true" # "true" or "false"
-#SIZE_TRAIN=-1 # set to -1 for default (full data)
-SIZE_TRAIN=7 # set to -1 for default (full data)
+SIZE_TRAIN=-1 # set to -1 for default (full data)
+#SIZE_TRAIN=7 # set to -1 for default (full data)
 HF_ORG="geronest"
-PAIRS=1
+PAIRS=5
+#PAIRS=1
 
 for i in $(seq 1 $iter_num); do
     echo "Running Iter ${i}"
@@ -14,7 +15,7 @@ for i in $(seq 1 $iter_num); do
     else
         MODEL=$OUTPUT_DIR
     fi
-    OUTPUT_DIR="checkpoints/Mis7B-It-SPPO-LoRA${LORA_R}-Iter${i}"
+    OUTPUT_DIR="checkpoints/Mistral-7B-It-SPPO-LoRA${LORA_R}-Iter${i}"
     PROMPT="UCLA-AGI/data-mistral-7b-instruct-sppo-iter${i}"
     OUT="data-mis7b-it-sppo-lora${LORA_R}-iter${i}"
 
