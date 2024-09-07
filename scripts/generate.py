@@ -1,6 +1,7 @@
 from transformers import AutoTokenizer, LlamaTokenizer
 from datasets import load_dataset
 from vllm import LLM, SamplingParams
+from vllm.lora.request import LoRARequest
 
 import argparse
 import torch
@@ -34,6 +35,9 @@ def parse_arguments():
     parser.add_argument("--frac_len", type=int, default=0)
     parser.add_argument("--data_frac", type=int, default=0)
     parser.add_argument("--world_size", type=int, default=1)
+    parser.add_argument("--iter", type=int, default=1)
+    parser.add_argument("--use_lora", type=bool, default=False)
+    parser.add_argument("--size_train", type=int, default=-1)
     return parser.parse_args()
 
 
@@ -72,18 +76,36 @@ def main():
     else:
         raise ValueError("Model not supported")
     tokenizer.pad_token = tokenizer.eos_token
-    # import pdb
-    # pdb.set_trace()
-    llm = LLM(
-        model=model_path,
-        revision="1296dc8fd9b21e6424c9c305c06db9ae60c03ace",
-        tokenizer_revision="1296dc8fd9b21e6424c9c305c06db9ae60c03ace",
-        tensor_parallel_size=args.world_size,
-    )
+
+    print("Start LLM Initialisation", model_path)
+    if args.iter > 1 and args.use_lora:
+        with open(model_path + "/adapter_config.json", "r") as json_data:
+            config_adapter = json.load(json_data)
+            print(config_adapter)
+        path_basemodel = config_adapter["base_model_name_or_path"]
+
+        llm = LLM(
+            model=path_basemodel,
+            revision="1296dc8fd9b21e6424c9c305c06db9ae60c03ace",
+            tokenizer_revision="1296dc8fd9b21e6424c9c305c06db9ae60c03ace",
+            tensor_parallel_size=args.world_size,
+            enable_lora=True,
+            max_lora_rank=config_adapter["r"]
+        )
+    else:
+        llm = LLM(
+            model=model_path,
+            revision="1296dc8fd9b21e6424c9c305c06db9ae60c03ace",
+            tokenizer_revision="1296dc8fd9b21e6424c9c305c06db9ae60c03ace",
+            tensor_parallel_size=args.world_size,
+        )
+
     prompts = [apply_template(data[idx]["prompt"], tokenizer) for idx in range(len(data))]
-    print(prompts[0])
     data_frac, frac_len = args.data_frac, args.frac_len
     prompts = split_prompts(prompts, frac_len, data_frac)
+    
+    if args.size_train > 0:
+        prompts = prompts[:args.size_train]
 
     pairs = args.pairs
 
@@ -97,7 +119,14 @@ def main():
             max_tokens=args.maxlen,
             seed=p * 50,
         )
-        response = llm.generate(prompts, sampling_params)
+        if args.iter > 1 and args.use_lora:
+            response = llm.generate(
+                prompts, 
+                sampling_params,
+                lora_request=LoRARequest("sql_adapter", 1, model_path)
+            )
+        else:
+            response = llm.generate(prompts, sampling_params)
         output = list(map(lambda x: x.outputs[0].text, response))
         with open(f"{args.output_dir}/responses_{data_frac}_{p}.json", "w") as f:
             json.dump(output, f)

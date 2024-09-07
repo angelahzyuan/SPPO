@@ -67,6 +67,9 @@ def load_and_process_datasets(data_args, tokenizer):
             {"text_prompt": "prompt", "text_chosen": "chosen", "text_rejected": "rejected"}
         )
 
+    if data_args.size_train > 0:
+        raw_datasets["train"] = raw_datasets["train"].select(range(data_args.size_train))
+
     return raw_datasets
 
 def setup_model(model_args, training_args):

@@ -1,7 +1,8 @@
 set -e
 set -x
 
-export OMP_NUM_THREADS=2
+#export OMP_NUM_THREADS=2
+export OMP_NUM_THREADS=1
 
 LEARNING_RATE="5.0e-7"
 ITER="1"
@@ -14,6 +15,9 @@ MODEL="mistralai/Mistral-7B-Instruct-v0.2"
 DATASET="synthetic_data_mistral-7b-instruct-sppo-iter1_score"
 BATCH_SIZE=8
 ACCUMULATE=1
+SIZE_TRAIN=-1
+USE_LORA="false"
+LORA_R=8
 
 while [[ "$#" -gt 0 ]]; do
     case $1 in
@@ -65,6 +69,18 @@ while [[ "$#" -gt 0 ]]; do
         ACCUMULATE="$2"
         shift
         ;;
+    --size_train)
+        SIZE_TRAIN="$2"
+        shift
+        ;;
+    --use_lora)
+        USE_LORA="$2"
+        shift
+        ;;
+    --lora_r)
+        LORA_R="$2"
+        shift
+        ;;
     *)
         echo "Unknown parameter passed: $1"
         exit 1
@@ -106,5 +122,8 @@ ACCELERATE_LOG_LEVEL=info accelerate launch \
     --per_device_train_batch_size=$BATCH_SIZE \
     --gradient_accumulation_steps=$ACCUMULATE \
     --model_name_or_path=$MODEL \
+    --use_peft=$USE_LORA \
+    --lora_r=$LORA_R \
+    --size_train=$SIZE_TRAIN \
     --num_train_epochs=$NUM
 # 2>&1 | tee "${log_file}.log"

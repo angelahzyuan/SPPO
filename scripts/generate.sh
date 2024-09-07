@@ -1,16 +1,21 @@
 set -e
 set -x
 
-export CUDA_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
-AVAILABLE_GPUS=(0 1 2 3 4 5 6 7)
+#export CUDA_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
+#AVAILABLE_GPUS=(0 1 2 3 4 5 6 7)
+
+AVAILABLE_GPUS=0
 HF_ORG=UCLA-AGI
 
 MODEL="mistralai/Mistral-7B-Instruct-v0.2"
 OUTDIR="data-mistral-7b-instruct-sppo-iter1"
+USE_LORA="false"
 
+ITER=1
 PAIRS=5
 FRAC=0
 PROMPTS="UCLA-AGI/data-mistral-7b-instruct-sppo-iter1"
+SIZE_TRAIN=-1
 
 while [[ "$#" -gt 0 ]]; do
     case $1 in
@@ -34,6 +39,23 @@ while [[ "$#" -gt 0 ]]; do
         PROMPTS="$2"
         shift
         ;;
+    --use_lora)
+        USE_LORA="$2"
+        shift
+        ;;
+    --size_train)
+        SIZE_TRAIN="$2"
+        shift
+        ;;
+    --hf_org)
+        HF_ORG="$2"
+        shift
+        ;;
+    --iter)
+        ITER="$2"
+        shift
+        ;;
+
     *)
         echo "Unknown parameter passed: $1"
         exit 1
@@ -53,7 +75,7 @@ echo "Using frac_len ${FRAC_LEN}"
 (
     data_frac=0
     for gpu_id in ${AVAILABLE_GPUS[@]}; do
-        CUDA_VISIBLE_DEVICES=$gpu_id python3 scripts/generate.py --model $MODEL --maxlen 2048 --output_dir "generated/$OUTDIR" --prompts $PROMPTS --pairs $PAIRS --world_size 1 --frac_len $FRAC_LEN --data_frac $data_frac > output_log_${gpu_id}.txt 2>&1 &
+        CUDA_VISIBLE_DEVICES=$gpu_id python3 scripts/generate.py --model $MODEL --maxlen 2048 --output_dir "generated/$OUTDIR" --prompts $PROMPTS --pairs $PAIRS --world_size 1 --frac_len $FRAC_LEN --data_frac $data_frac --iter $ITER --use_lora $USE_LORA --size_train $SIZE_TRAIN > output_log_${gpu_id}.txt 2>&1 &
         ((data_frac+=1));
     done
     wait
@@ -76,7 +98,7 @@ python3 scripts/preload.py
 (
     data_frac=0
     for gpu_id in ${AVAILABLE_GPUS[@]}; do
-        CUDA_VISIBLE_DEVICES=$gpu_id python3 scripts/rank.py --model $MODEL --output_dir $OUTDIR --pairs $PAIRS --numgpu ${#AVAILABLE_GPUS[@]} --frac_len $FRAC_LEN --data_frac $data_frac --gpu $gpu_id --prompts $PROMPTS > rank_log_${gpu_id}.txt 2>&1 &
+        CUDA_VISIBLE_DEVICES=$gpu_id python3 scripts/rank.py --model $MODEL --output_dir $OUTDIR --pairs $PAIRS --numgpu ${#AVAILABLE_GPUS[@]} --frac_len $FRAC_LEN --data_frac $data_frac --gpu $gpu_id --prompts $PROMPTS --size_train $SIZE_TRAIN > rank_log_${gpu_id}.txt 2>&1 &
         ((data_frac+=1));
     done
     wait
@@ -85,4 +107,4 @@ all_rank=$!
 
 wait $all_rank
 
-python3 scripts/compute_prob.py --org $HF_ORG --gpu_ids "$(IFS=, ; echo "${AVAILABLE_GPUS[*]}")" --output_dir $OUTDIR --pairs $PAIRS --frac_len $FRAC_LEN --prompts $PROMPTS
+python3 scripts/compute_prob.py --org $HF_ORG --gpu_ids "$(IFS=, ; echo "${AVAILABLE_GPUS[*]}")" --output_dir $OUTDIR --pairs $PAIRS --frac_len $FRAC_LEN --prompts $PROMPTS --size_train $SIZE_TRAIN
