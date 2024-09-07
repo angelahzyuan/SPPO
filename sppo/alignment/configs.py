@@ -206,6 +206,10 @@ class DataArguments:
     truncation_side: Optional[str] = field(
         default=None, metadata={"help": "Truncation side to use for the tokenizer."}
     )
+    size_train: Optional[int] = field(
+        default=-1, metadata={"help": "Size of the training dataset. Uses all the data when set to -1. Give a positive integer (ex. 16) to apply."}
+    )
+
 
 
 @dataclass

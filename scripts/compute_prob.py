@@ -16,6 +16,7 @@ def parse_arguments():
     parser.add_argument("--num_gpu", type=int, default=8)
     parser.add_argument("--org", type=str, default="UCLA-AGI")
     parser.add_argument("--gpu_ids", type=str, default=None)
+    parser.add_argument("--size_train", type=int, default=-1)
     return parser.parse_args()
 
 def from_ranks(args):
@@ -24,7 +25,12 @@ def from_ranks(args):
     data = load_dataset(args.prompts, split="train")
     print(f"Length of dataset: {len(data)}")
 
-    scores = [0 for _ in range(len(data))]
+    len_data = len(data)
+    if args.size_train > 0:
+        len_data = args.size_train
+        print(f"Train data size reduced to {len_data}")
+
+    scores = [0 for _ in range(len_data)]
     if args.gpu_ids is not None:
         gpus = args.gpu_ids.strip("()").split(',')
     else:
@@ -51,7 +57,7 @@ def from_ranks(args):
     with open(f"generated/{args.output_dir}/probabilities.json", "w") as f:
         json.dump(probs, f)
 
-    df = data.to_pandas()
+    df = data.to_pandas().iloc[:len_data]
     for i in range(pairs):
         with open(f"generated/{args.output_dir}/responses_{i}.json") as f:
             responses = json.load(f)
@@ -60,7 +66,7 @@ def from_ranks(args):
                 {"content": data[j]["prompt"], "role": "user"},
                 {"content": responses[j], "role": "assistant"},
             ]
-            for j in range(len(data))
+            for j in range(len_data)
         ]
         df[f"generate_{i}"] = fmt
 
@@ -115,7 +121,8 @@ def prepare_score(args):
     print(f"Saved file to {OUTPATH}/train.parquet")
 
     # Temporary solution to make the code run, cannot use for test/evaluation purpose
-    test = train_new.sample(n=500)
+    n_sample = min(train_new.shape[0], 500)
+    test = train_new.sample(n=n_sample)
     test.to_parquet(f'{OUTPATH}/test.parquet', index=False)
     print(f"Saved file to {OUTPATH}/test.parquet")
 

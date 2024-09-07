@@ -20,6 +20,7 @@ def parse_arguments():
     parser.add_argument('--frac_len', type=int, default=0)
     parser.add_argument("--gpu", type=int, default=0)  # local rank
     parser.add_argument("--pairs", type=int, default=5)
+    parser.add_argument("--size_train", type=int, default=-1)
     return parser.parse_args()
 
 def ranking(args, prompts, candidates):
@@ -67,6 +68,9 @@ def main(args):
     pairs = args.pairs
     all_generated = []
 
+    if args.size_train > 0:
+        prompts_all = prompts_all[:args.size_train]
+
     for i in range(pairs):
         file_path = f"generated/{args.output_dir}/responses_{i}.json"
         with open(file_path) as f:
@@ -74,7 +78,7 @@ def main(args):
             all_generated.append(gen)
 
     candidates_texts = list(zip(*all_generated))
-    assert len(data) == len(candidates_texts)
+    assert len(prompts_all) == len(candidates_texts)
     print(f'Length of data: {len(data)}')
 
     data_frac = args.data_frac

@@ -195,41 +195,41 @@ class SPPOTrainer(Trainer):
                 "PEFT is not installed and you passed a `peft_config` in the trainer's kwargs, please install it to use the PEFT models"
             )
         elif is_peft_available() and peft_config is not None:
-            raise NotImplementedError
-            # # if model is a peft model and we have a peft_config, we merge and unload it first
-            # if isinstance(model, PeftModel):
-            #     model = model.merge_and_unload()
+            #raise NotImplementedError
+            # if model is a peft model and we have a peft_config, we merge and unload it first
+            if isinstance(model, PeftModel):
+                model = model.merge_and_unload()
 
-            # if getattr(model, "is_loaded_in_8bit", False) or getattr(model, "is_loaded_in_4bit", False):
-            #     _support_gc_kwargs = hasattr(
-            #         args, "gradient_checkpointing_kwargs"
-            #     ) and "gradient_checkpointing_kwargs" in list(
-            #         inspect.signature(prepare_model_for_kbit_training).parameters
-            #     )
+            if getattr(model, "is_loaded_in_8bit", False) or getattr(model, "is_loaded_in_4bit", False):
+                _support_gc_kwargs = hasattr(
+                    args, "gradient_checkpointing_kwargs"
+                ) and "gradient_checkpointing_kwargs" in list(
+                    inspect.signature(prepare_model_for_kbit_training).parameters
+                )
 
-            #     preprare_model_kwargs = {"use_gradient_checkpointing": args.gradient_checkpointing}
+                preprare_model_kwargs = {"use_gradient_checkpointing": args.gradient_checkpointing}
 
-            #     if _support_gc_kwargs:
-            #         preprare_model_kwargs["gradient_checkpointing_kwargs"] = args.gradient_checkpointing_kwargs
+                if _support_gc_kwargs:
+                    preprare_model_kwargs["gradient_checkpointing_kwargs"] = args.gradient_checkpointing_kwargs
 
-            #     model = prepare_model_for_kbit_training(model, **preprare_model_kwargs)
-            # elif getattr(args, "gradient_checkpointing", False):
-            #     # For backward compatibility with older versions of transformers
-            #     if hasattr(model, "enable_input_require_grads"):
-            #         model.enable_input_require_grads()
-            #     else:
+                model = prepare_model_for_kbit_training(model, **preprare_model_kwargs)
+            elif getattr(args, "gradient_checkpointing", False):
+                # For backward compatibility with older versions of transformers
+                if hasattr(model, "enable_input_require_grads"):
+                    model.enable_input_require_grads()
+                else:
 
-            #         def make_inputs_require_grad(module, input, output):
-            #             output.requires_grad_(True)
+                    def make_inputs_require_grad(module, input, output):
+                        output.requires_grad_(True)
 
-            #         model.get_input_embeddings().register_forward_hook(make_inputs_require_grad)
+                    model.get_input_embeddings().register_forward_hook(make_inputs_require_grad)
 
-            # # get peft model with the given config
-            # model = get_peft_model(model, peft_config)
-            # if args.bf16 and getattr(model, "is_loaded_in_4bit", False):
-            #     peft_module_casting_to_bf16(model)
-            #     # If args.bf16 we need to explicitly call `generate` with torch amp autocast context manager
-            #     self._peft_has_been_casted_to_bf16 = True
+            # get peft model with the given config
+            model = get_peft_model(model, peft_config)
+            #if args.bf16 and getattr(model, "is_loaded_in_4bit", False):
+            #    peft_module_casting_to_bf16(model)
+                # If args.bf16 we need to explicitly call `generate` with torch amp autocast context manager
+            #    self._peft_has_been_casted_to_bf16 = True
 
         # For models that use gradient_checkpoiting, we need to attach a hook that enables input
         # to explicitly have `requires_grad=True`, otherwise training will either silently
