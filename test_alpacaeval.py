@@ -5,6 +5,7 @@ import os
 import random
 import warnings
 import numpy as np
+import time
 
 import datasets
 # from datasets import load_dataset
@@ -24,8 +25,9 @@ USE_LORA = True
 #path_llm = "checkpoints/Llama-3-8B-Instruct-SPPO-LoRA-Iter1"
 #path_llm = "checkpoints/Mistral-7B-Instruct-SPPO-Iter3"
 #path_llm = "checkpoints/Mis7B-It-SPPO-LoRA128-Iter1"
-path_llm = "checkpoints/Mis7B-It-SPPO-LoRA64-Iter1"
-name_file = "mistral-lora64-test0"
+#path_llm = "checkpoints/Mis7B-It-SPPO-LoRA64-Iter1"
+path_llm = "checkpoints/Mistral-7B-It-SPPO-LoRA8-Iter3"
+name_file = "mistral-lora8-iter3"
 
 if USE_LORA:
     with open(path_llm + "/adapter_config.json", 'r') as json_data:
@@ -61,7 +63,9 @@ sampling_params = SamplingParams(
     #max_tokens=64, # set it to higher value like 2048 for proper test
 )
 
-max_examples = -1
+time_start = time.time()
+
+max_examples = 5
 idx_examples = 0
 for example in eval_set:
     ''' Tested with
@@ -96,6 +100,9 @@ for example in eval_set:
     idx_examples += 1
     if max_examples > 0 and idx_examples == max_examples:
         break
+
+time_elapsed = time.time() - time_start
+print(f"{time_elapsed / 3600:.2f} hours passed to finish generating {idx_examples} responses")
 
 # Save generated responses
 path_savedir = "./results_alpacaeval/"
