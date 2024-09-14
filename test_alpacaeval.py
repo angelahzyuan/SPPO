@@ -65,7 +65,7 @@ sampling_params = SamplingParams(
 
 time_start = time.time()
 
-max_examples = 5
+max_examples = -1 # Set this to a positive value to test on smaller number of prompts
 idx_examples = 0
 for example in eval_set:
     ''' Tested with
