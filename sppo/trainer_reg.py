@@ -55,7 +55,7 @@ if is_deepspeed_available():
 #     feature['chosen_probs_lose'] = chosen_probs_lose
 #     return feature
 
-class SPPOTrainer(Trainer):
+class SPPORegTrainer(Trainer):
     r"""
     Initialize SPPOTrainer.
 
@@ -160,6 +160,7 @@ class SPPOTrainer(Trainer):
         ref_model_init_kwargs: Optional[Dict] = None,
         model_adapter_name: str = None,
         ref_adapter_name: str = None,
+        reg_coef: float = 0.1,
     ):
         if model_init_kwargs is None:
             model_init_kwargs = {}
@@ -401,6 +402,10 @@ class SPPOTrainer(Trainer):
                 self.ref_model = self._prepare_deepspeed(self.ref_model)
             else:
                 self.ref_model = self.accelerator.prepare_model(self.ref_model, evaluation_mode=True)
+
+
+        ######## Regularized SPPO ########
+        self.reg_coef = reg_coef
 
     def _prepare_deepspeed(self, model: PreTrainedModelWrapper):
         # Adapted from accelerate: https://github.com/huggingface/accelerate/blob/739b135f8367becb67ffaada12fe76e3aa60fefd/src/accelerate/accelerator.py#L1473
@@ -846,6 +851,7 @@ class SPPOTrainer(Trainer):
             A tuple of three tensors: (losses, chosen_rewards, rejected_rewards).
             The losses tensor contains the SPPO loss for each example in the batch.
             The chosen_rewards and rejected_rewards tensors contain the rewards for the chosen and rejected responses, respectively.
+            forward_loss: The forward loss for the policy model for each example in the batch.
         """
         pi_logratios = policy_chosen_logps - policy_rejected_logps
         if reference_free:
@@ -877,6 +883,9 @@ class SPPOTrainer(Trainer):
                 f"Unknown loss type: {self.loss_type}. Should be one of ['sigmoid', 'hinge', 'ipo', 'kto_pair']"
             )
 
+        # Regularized SPPO
+        forward_loss = - policy_chosen_logps.mean() - policy_rejected_logps.mean()
+
         chosen_rewards = (
             self.beta
             * (
@@ -894,7 +903,7 @@ class SPPOTrainer(Trainer):
         # tau = 1
         # losses = losses - tau * entropy
 
-        return losses, chosen_rewards, rejected_rewards
+        return losses, chosen_rewards, rejected_rewards, forward_loss
 
     @staticmethod
     def get_batch_logps(
@@ -1021,7 +1030,7 @@ class SPPOTrainer(Trainer):
                         _,
                     ) = self.concatenated_forward(self.ref_model, batch)
 
-        losses, chosen_rewards, rejected_rewards = self.sppo_loss(
+        losses, chosen_rewards, rejected_rewards, forward_loss = self.sppo_loss(
             policy_chosen_logps,
             policy_rejected_logps,
             reference_chosen_logps,
@@ -1045,7 +1054,10 @@ class SPPOTrainer(Trainer):
 
         # for regularized SPPO
         metrics["reg/entropy"] = - policy_chosen_logps.mean().cpu() - policy_rejected_logps.mean().cpu()
+        # forward loss
+        metrics["reg/forward_loss"] = forward_loss.mean().cpu()
 
+        losses += forward_loss * self.reg_coef
         return losses.mean(), metrics
 
     def compute_loss(

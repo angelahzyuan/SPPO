@@ -206,6 +206,10 @@ class DataArguments:
     truncation_side: Optional[str] = field(
         default=None, metadata={"help": "Truncation side to use for the tokenizer."}
     )
+    # sft_dataset_mixer: Optional[Dict[str, float]] = field(
+    #     default=None,
+    #     metadata={"help": ("Datasets and their proportions to be used for training ift/rl.")},
+    # )
 
 
 @dataclass
