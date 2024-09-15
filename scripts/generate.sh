@@ -55,7 +55,10 @@ while [[ "$#" -gt 0 ]]; do
         ITER="$2"
         shift
         ;;
-
+    --gpu)
+        AVAILABLE_GPUS="$2"
+        shift
+        ;;
     *)
         echo "Unknown parameter passed: $1"
         exit 1
@@ -84,7 +87,7 @@ all_gen=$!
 
 wait $all_gen
 
-python3 scripts/combine_generate.py --output_dir "generated/$OUTDIR" --gpu_ids "$(IFS=, ; echo "${AVAILABLE_GPUS[*]}")" --pairs $PAIRS
+python3 scripts/combine_generate.py --output_dir "generated/$OUTDIR" --numgpu ${#AVAILABLE_GPUS[@]} --pairs $PAIRS
 
 
 # #####################

@@ -81,6 +81,10 @@ while [[ "$#" -gt 0 ]]; do
         LORA_R="$2"
         shift
         ;;
+    --gpu)
+        AVAILABLE_GPUS="$2"
+        shift
+        ;;
     *)
         echo "Unknown parameter passed: $1"
         exit 1
@@ -89,6 +93,7 @@ while [[ "$#" -gt 0 ]]; do
     shift
 done
 
+export CUDA_VISIBLE_DEVICES=$AVAILABLE_GPUS
 PREF="${PREF}_${NUM}"
 
 LEVEL1="iter${ITER}_${LEARNING_RATE}_beta${BETA}_${OPTIM}"
