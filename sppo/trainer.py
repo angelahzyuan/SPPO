@@ -159,6 +159,7 @@ class SPPOTrainer(Trainer):
         ref_model_init_kwargs: Optional[Dict] = None,
         model_adapter_name: str = None,
         ref_adapter_name: str = None,
+        reg_coef: float = 0.1,
     ):
         if model_init_kwargs is None:
             model_init_kwargs = {}
@@ -341,6 +342,7 @@ class SPPOTrainer(Trainer):
             )
 
         self.beta = beta
+        self.reg_coef = reg_coef
         self.label_smoothing = label_smoothing
         self.loss_type = loss_type
 
@@ -881,6 +883,21 @@ class SPPOTrainer(Trainer):
             loss_w = (logits_w - (1 / self.beta)*(chosen_probs - 0.5)) ** 2
             loss_l = (logits_l + (1 / self.beta)*(chosen_probs - 0.5)) ** 2
             losses = (loss_w + loss_l)/2
+        elif self.loss_type == "sppo_forwardkl":
+            loss_w = (logits_w - (1 / self.beta)*(chosen_probs_win - 0.5)) ** 2
+            loss_l = (logits_l - (1 / self.beta)*(chosen_probs_lose - 0.5)) ** 2
+            reg = (-logits_w).exp().mean() + (-logits_l).exp().mean()
+            losses = (loss_w + loss_l)/2 + self.reg_coef * reg
+        elif self.loss_type == "sppo_reversekl":
+            loss_w = (logits_w - (1 / self.beta)*(chosen_probs_win - 0.5)) ** 2
+            loss_l = (logits_l - (1 / self.beta)*(chosen_probs_lose - 0.5)) ** 2
+            reg = (logits_w ** 2).mean() + (logits_l ** 2).mean()
+            losses = (loss_w + loss_l)/2 + self.reg_coef * reg
+        elif self.loss_type == "sppo_entropy":
+            loss_w = (logits_w - (1 / self.beta)*(chosen_probs_win - 0.5)) ** 2
+            loss_l = (logits_l - (1 / self.beta)*(chosen_probs_lose - 0.5)) ** 2
+            reg = (policy_chosen_logps ** 2).mean() + (policy_rejected_logps ** 2).mean()
+            losses = (loss_w + loss_l)/2 + self.reg_coef * reg
         elif self.loss_type == "kto_pair":
             # eqn (7) of the HALOs paper
             chosen_KL = (policy_chosen_logps - reference_chosen_logps).mean().clamp(min=0)
