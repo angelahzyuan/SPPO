@@ -160,7 +160,7 @@ class SPPORegTrainer(Trainer):
         ref_model_init_kwargs: Optional[Dict] = None,
         model_adapter_name: str = None,
         ref_adapter_name: str = None,
-        reg_coef: float = 0.1,
+        reg_coef: float = 1,
     ):
         if model_init_kwargs is None:
             model_init_kwargs = {}
@@ -874,17 +874,31 @@ class SPPORegTrainer(Trainer):
             loss_w = (logits_w - (1 / self.beta)*(chosen_probs_win - 0.5)) ** 2
             loss_l = (logits_l - (1 / self.beta)*(chosen_probs_lose - 0.5)) ** 2
             losses = (loss_w + loss_l)/2
+            reg_loss = torch.tensor(0)
         elif self.loss_type == "sppo_single":
             loss_w = (logits_w - (1 / self.beta)*(chosen_probs - 0.5)) ** 2
             loss_l = (logits_l + (1 / self.beta)*(chosen_probs - 0.5)) ** 2
             losses = (loss_w + loss_l)/2
+            reg_loss = torch.tensor(0)
+        elif self.loss_type == "sppo_forward_sft_win":
+            loss_w = (logits_w - (1 / self.beta)*(chosen_probs_win - 0.5)) ** 2
+            loss_l = (logits_l - (1 / self.beta)*(chosen_probs_lose - 0.5)) ** 2
+            losses = (loss_w + loss_l)/2
+            reg_loss = - policy_chosen_logps.mean()  # loss for regularization
+        elif self.loss_type == "sppo_forward_sft_all":
+            loss_w = (logits_w - (1 / self.beta)*(chosen_probs_win - 0.5)) ** 2
+            loss_l = (logits_l - (1 / self.beta)*(chosen_probs_lose - 0.5)) ** 2
+            losses = (loss_w + loss_l)/2
+            reg_loss = - policy_chosen_logps.mean() - policy_rejected_logps.mean()
+        elif self.loss_type == "sppo_entropy":
+            loss_w = (logits_w - (1 / self.beta)*(chosen_probs_win - 0.5)) ** 2
+            loss_l = (logits_l - (1 / self.beta)*(chosen_probs_lose - 0.5)) ** 2
+            losses = (loss_w + loss_l)/2
+            reg_loss = (policy_chosen_logps ** 2).mean() + (policy_rejected_logps ** 2).mean()
         else:
             raise ValueError(
                 f"Unknown loss type: {self.loss_type}. Should be one of ['sigmoid', 'hinge', 'ipo', 'kto_pair']"
             )
-
-        # Regularized SPPO
-        forward_loss = - policy_chosen_logps.mean() - policy_rejected_logps.mean()
 
         chosen_rewards = (
             self.beta
@@ -899,11 +913,8 @@ class SPPORegTrainer(Trainer):
                 - reference_rejected_logps.to(self.accelerator.device)
             ).detach()
         )
-        # entropy = - policy_chosen_logps.mean() - policy_rejected_logps.mean()
-        # tau = 1
-        # losses = losses - tau * entropy
 
-        return losses, chosen_rewards, rejected_rewards, forward_loss
+        return losses, chosen_rewards, rejected_rewards, reg_loss
 
     @staticmethod
     def get_batch_logps(
@@ -1030,7 +1041,7 @@ class SPPORegTrainer(Trainer):
                         _,
                     ) = self.concatenated_forward(self.ref_model, batch)
 
-        losses, chosen_rewards, rejected_rewards, forward_loss = self.sppo_loss(
+        losses, chosen_rewards, rejected_rewards, reg_loss = self.sppo_loss(
             policy_chosen_logps,
             policy_rejected_logps,
             reference_chosen_logps,
@@ -1052,12 +1063,10 @@ class SPPORegTrainer(Trainer):
         metrics[f"{prefix}logits/rejected"] = policy_rejected_logits.detach().mean().cpu()
         metrics[f"{prefix}logits/chosen"] = policy_chosen_logits.detach().mean().cpu()
 
-        # for regularized SPPO
-        metrics["reg/entropy"] = - policy_chosen_logps.mean().cpu() - policy_rejected_logps.mean().cpu()
-        # forward loss
-        metrics["reg/forward_loss"] = forward_loss.mean().cpu()
+        # reg loss
+        metrics["reg/reg_loss"] = reg_loss.mean().cpu()
 
-        losses += forward_loss * self.reg_coef
+        losses += reg_loss * self.reg_coef
         return losses.mean(), metrics
 
     def compute_loss(

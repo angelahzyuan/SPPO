@@ -258,3 +258,6 @@ class SPPOConfig(transformers.TrainingArguments):
     optim: Optional[str] = field(default="rmsprop")
     remove_unused_columns: bool = field(default=False)
     loss_type: Optional[str] = field(default="sigmoid", metadata={"help": ("The loss type for SPPO.")})
+
+    # regularization parameters
+    reg_coef: Optional[float] = field(default=0.1, metadata={"help": ("The regularization coefficient for Regularized SPPO.")})
