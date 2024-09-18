@@ -11,6 +11,7 @@ OPTIM="rmsprop"
 PREF="sppo_score"
 NUM=18
 MODEL="mistralai/Mistral-7B-Instruct-v0.2"
+REF_MODEL="mistralai/Mistral-7B-Instruct-v0.2"
 DATASET="synthetic_data_mistral-7b-instruct-sppo-iter1_score"
 BATCH_SIZE=8
 ACCUMULATE=1
@@ -106,5 +107,7 @@ ACCELERATE_LOG_LEVEL=info accelerate launch \
     --per_device_train_batch_size=$BATCH_SIZE \
     --gradient_accumulation_steps=$ACCUMULATE \
     --model_name_or_path=$MODEL \
-    --num_train_epochs=$NUM
+    --num_train_epochs=$NUM \
+    --ref_model_name_or_path=$REF_MODEL 
+
 # 2>&1 | tee "${log_file}.log"

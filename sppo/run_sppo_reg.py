@@ -113,12 +113,12 @@ def setup_model(model_args, training_args):
         )
         model_kwargs = None
 
-    ref_model = model
+    ref_model = model_args.ref_model_name_or_path
     ref_model_kwargs = model_kwargs
 
-    if model_args.use_peft:
-        ref_model = None
-        ref_model_kwargs = None
+    # if model_args.use_peft:
+    #     ref_model = None
+    #     ref_model_kwargs = None
 
     return model, ref_model, model_kwargs, ref_model_kwargs
 
