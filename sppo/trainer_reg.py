@@ -459,22 +459,34 @@ class SPPORegTrainer(Trainer):
 
             reference_chosen_logps = []
             reference_rejected_logps = []
+            last_iterate_chosen_logps = []
+            last_iterate_rejected_logps = []
             for padded_batch in tqdm(iterable=data_loader, desc="Train dataset reference log probs"):
-                reference_chosen_logp, reference_rejected_logp = self.compute_reference_log_probs(padded_batch)
-                reference_chosen_logp, reference_rejected_logp = self.accelerator.gather_for_metrics(
-                    (reference_chosen_logp, reference_rejected_logp)
+                reference_chosen_logp, reference_rejected_logp, last_iter_chosen_logps, last_iter_rejected_logps = self.compute_reference_log_probs(padded_batch)
+                reference_chosen_logp, reference_rejected_logp, last_iter_chosen_logps, last_iter_rejected_logps = self.accelerator.gather_for_metrics(
+                    (reference_chosen_logp, reference_rejected_logp, last_iter_chosen_logps, last_iter_rejected_logps)
                 )
                 reference_chosen_logps.append(reference_chosen_logp.cpu())
                 reference_rejected_logps.append(reference_rejected_logp.cpu())
+                last_iterate_chosen_logps.append(last_iter_chosen_logps.cpu())
+                last_iterate_rejected_logps.append(last_iter_rejected_logps.cpu())
 
             all_reference_chosen_logps = torch.cat(reference_chosen_logps).float().numpy()
             all_reference_rejected_logps = torch.cat(reference_rejected_logps).float().numpy()
+            all_last_iterate_chosen_logps = torch.cat(last_iterate_chosen_logps).float().numpy()
+            all_last_iterate_rejected_logps = torch.cat(last_iterate_rejected_logps).float().numpy()
 
             self.train_dataset = self.train_dataset.add_column(
                 name="reference_chosen_logps", column=all_reference_chosen_logps
             )
             self.train_dataset = self.train_dataset.add_column(
                 name="reference_rejected_logps", column=all_reference_rejected_logps
+            )
+            self.train_dataset = self.train_dataset.add_column(
+                name="last_iterate_chosen_logps", column=all_last_iterate_chosen_logps
+            )
+            self.train_dataset = self.train_dataset.add_column(
+                name="last_iterate_rejected_logps", column=all_last_iterate_rejected_logps
             )
 
             self._precomputed_train_ref_log_probs = True
@@ -747,14 +759,15 @@ class SPPORegTrainer(Trainer):
 
         # compute reference logps
         with torch.no_grad(), compte_ref_context_manager():
+            with self.null_ref_context():
+                (
+                    last_iter_chosen_logps,
+                    last_iter_rejected_logps,
+                    _,
+                    _,
+                ) = self.concatenated_forward(self.model, padded_batch)
             if self.ref_model is None:
-                with self.null_ref_context():
-                    (
-                        reference_chosen_logps,
-                        reference_rejected_logps,
-                        _,
-                        _,
-                    ) = self.concatenated_forward(self.model, padded_batch)
+                reference_chosen_logps, reference_rejected_logps = last_iter_chosen_logps, last_iter_rejected_logps
             else:
                 (
                     reference_chosen_logps,
@@ -763,7 +776,7 @@ class SPPORegTrainer(Trainer):
                     _,
                 ) = self.concatenated_forward(self.ref_model, padded_batch)
 
-        return reference_chosen_logps, reference_rejected_logps
+        return reference_chosen_logps, reference_rejected_logps, last_iter_chosen_logps, last_iter_rejected_logps
 
     @staticmethod
     def concatenated_inputs(
@@ -833,6 +846,8 @@ class SPPORegTrainer(Trainer):
         policy_rejected_logps: torch.FloatTensor,
         reference_chosen_logps: torch.FloatTensor,
         reference_rejected_logps: torch.FloatTensor,
+        last_iter_chosen_logps: torch.FloatTensor,
+        last_iter_rejected_logps: torch.FloatTensor,
         chosen_probs: Union[torch.FloatTensor, None] = None,
         chosen_probs_win: Union[torch.FloatTensor, None] = None,
         chosen_probs_lose: Union[torch.FloatTensor, None] = None,
@@ -864,41 +879,33 @@ class SPPORegTrainer(Trainer):
         logits = pi_logratios - ref_logratios
 
         # For sppo
-        logits_w = policy_chosen_logps - reference_chosen_logps
-        logits_l = policy_rejected_logps - reference_rejected_logps
+        logits_diff_w = policy_chosen_logps - reference_chosen_logps
+        logits_diff_l = policy_rejected_logps - reference_rejected_logps
+        logits_w = policy_chosen_logps - last_iter_chosen_logps #reference_chosen_logps
+        logits_l = policy_rejected_logps - last_iter_rejected_logps #reference_rejected_logps
 
         # The beta is a temperature parameter for the DPO loss, typically something in the range of 0.1 to 0.5. In SPPO, beta=1/eta has a different meaning, and is usually chosen around 1e-3.
         # We ignore the reference model as beta -> 0. The label_smoothing parameter encodes our uncertainty about the labels and
         # calculates a conservative SPPO loss.
+        loss_w = (logits_w - (1 / self.beta)*(chosen_probs_win - 0.5)) ** 2
+        loss_l = (logits_l - (1 / self.beta)*(chosen_probs_lose - 0.5)) ** 2
+        losses = (loss_w + loss_l)/2
         if self.loss_type == "sppo":
-            loss_w = (logits_w - (1 / self.beta)*(chosen_probs_win - 0.5)) ** 2
-            loss_l = (logits_l - (1 / self.beta)*(chosen_probs_lose - 0.5)) ** 2
-            losses = (loss_w + loss_l)/2
             reg_loss = torch.tensor(0)
         elif self.loss_type == "sppo_single":
-            loss_w = (logits_w - (1 / self.beta)*(chosen_probs - 0.5)) ** 2
-            loss_l = (logits_l + (1 / self.beta)*(chosen_probs - 0.5)) ** 2
-            losses = (loss_w + loss_l)/2
             reg_loss = torch.tensor(0)
         elif self.loss_type == "sppo_forward_sft_win":
-            loss_w = (logits_w - (1 / self.beta)*(chosen_probs_win - 0.5)) ** 2
-            loss_l = (logits_l - (1 / self.beta)*(chosen_probs_lose - 0.5)) ** 2
-            losses = (loss_w + loss_l)/2
             reg_loss = - policy_chosen_logps.mean()  # loss for regularization
         elif self.loss_type == "sppo_forward_sft_all":
-            loss_w = (logits_w - (1 / self.beta)*(chosen_probs_win - 0.5)) ** 2
-            loss_l = (logits_l - (1 / self.beta)*(chosen_probs_lose - 0.5)) ** 2
-            losses = (loss_w + loss_l)/2
             reg_loss = - policy_chosen_logps.mean() - policy_rejected_logps.mean()
+        elif self.loss_type == "sppo_forward_importance":
+            reg_loss = (logits_diff_w).exp().mean() + (logits_diff_l).exp().mean()
+        elif self.loss_type == "sppo_reversekl":
+            reg_loss = (logits_diff_w ** 2).mean() + (logits_diff_l ** 2).mean()
         elif self.loss_type == "sppo_entropy":
-            loss_w = (logits_w - (1 / self.beta)*(chosen_probs_win - 0.5)) ** 2
-            loss_l = (logits_l - (1 / self.beta)*(chosen_probs_lose - 0.5)) ** 2
-            losses = (loss_w + loss_l)/2
             reg_loss = (policy_chosen_logps ** 2).mean() + (policy_rejected_logps ** 2).mean()
         else:
-            raise ValueError(
-                f"Unknown loss type: {self.loss_type}. Should be one of ['sigmoid', 'hinge', 'ipo', 'kto_pair']"
-            )
+            raise ValueError(f"Unknown loss type: {self.loss_type}")
 
         chosen_rewards = (
             self.beta
@@ -1023,16 +1030,19 @@ class SPPORegTrainer(Trainer):
         if "reference_chosen_logps" in batch and "reference_rejected_logps" in batch:
             reference_chosen_logps = batch["reference_chosen_logps"]
             reference_rejected_logps = batch["reference_rejected_logps"]
+            last_iterate_chosen_logps = batch["last_iterate_chosen_logps"]
+            last_iterate_rejected_logps = batch["last_iterate_rejected_logps"]
         else:
             with torch.no_grad():
+                with self.null_ref_context():
+                    (
+                        last_iterate_chosen_logps,
+                        last_iterate_rejected_logps,
+                        _,
+                        _,
+                    ) = self.concatenated_forward(self.model, batch)
                 if self.ref_model is None:
-                    with self.null_ref_context():
-                        (
-                            reference_chosen_logps,
-                            reference_rejected_logps,
-                            _,
-                            _,
-                        ) = self.concatenated_forward(self.model, batch)
+                    reference_chosen_logps, reference_rejected_logps = last_iterate_chosen_logps, last_iterate_rejected_logps
                 else:
                     (
                         reference_chosen_logps,
@@ -1046,6 +1056,8 @@ class SPPORegTrainer(Trainer):
             policy_rejected_logps,
             reference_chosen_logps,
             reference_rejected_logps,
+            last_iterate_chosen_logps,
+            last_iterate_rejected_logps,
             chosen_probs,
             chosen_probs_win,
             chosen_probs_lose,
