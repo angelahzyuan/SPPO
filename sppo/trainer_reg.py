@@ -162,6 +162,7 @@ class SPPORegTrainer(Trainer):
         ref_adapter_name: str = None,
         reg_coef: float = 0.1,
     ):
+        assert isinstance(model, str)
         if model_init_kwargs is None:
             model_init_kwargs = {}
         elif not isinstance(model, str):
@@ -264,6 +265,7 @@ class SPPORegTrainer(Trainer):
         self.model_adapter_name = model_adapter_name
         self.ref_adapter_name = ref_adapter_name
 
+        self.last_iter_model = create_reference_model(model)
         if ref_model:
             self.ref_model = ref_model
         elif self.is_peft_model or precompute_ref_log_probs:
@@ -391,7 +393,10 @@ class SPPORegTrainer(Trainer):
                 raise ValueError(
                     "You cannot use `precompute_ref_log_probs=True` with Deepspeed ZeRO-3. Please set `precompute_ref_log_probs=False`."
                 )
-
+        if self.is_deepspeed_enabled:
+            self.last_iter_model = self._prepare_deepspeed(self.last_iter_model)
+        else:
+            self.last_iter_model = self.accelerator.prepare_model(self.last_iter_model, evaluation_mode=True)
         if self.ref_model is None:
             if not (self.is_peft_model or self.precompute_ref_log_probs):
                 raise ValueError(
@@ -765,7 +770,7 @@ class SPPORegTrainer(Trainer):
                     last_iter_rejected_logps,
                     _,
                     _,
-                ) = self.concatenated_forward(self.model, padded_batch)
+                ) = self.concatenated_forward(self.last_iter_model, padded_batch)
             if self.ref_model is None:
                 reference_chosen_logps, reference_rejected_logps = last_iter_chosen_logps, last_iter_rejected_logps
             else:
@@ -1045,7 +1050,7 @@ class SPPORegTrainer(Trainer):
                         last_iterate_rejected_logps,
                         _,
                         _,
-                    ) = self.concatenated_forward(self.model, batch)
+                    ) = self.concatenated_forward(self.last_iter_model, batch)
                 if self.ref_model is None:
                     reference_chosen_logps, reference_rejected_logps = last_iterate_chosen_logps, last_iterate_rejected_logps
                 else:
