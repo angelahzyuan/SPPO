@@ -4,8 +4,8 @@ OLD_DATASET_DIR="synthetic_data_sft_fixedprompt1-mistral-7b-instruct-sppo-iter1_
 MODEL="mistralai/Mistral-7B-Instruct-v0.2"
 PROMPT="UCLA-AGI/data-mistral-7b-instruct-sppo-iter1"
 
-exp_list=(sppo_forward_importance 0.01 
-          sppo_forward_importance 0.001 
+exp_list=(sppo_forward_importance 0.1 
+          sppo_forward_importance 0.01 
           sppo_reversekl 0.1
           sppo_reversekl 0.01)
 
