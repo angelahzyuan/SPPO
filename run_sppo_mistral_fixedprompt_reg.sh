@@ -1,9 +1,11 @@
 #!/bin/bash
 iter_num=6
 LOSS_TYPE=sppo_reversekl
-REG_COEF=0.1
+# LOSS_TYPE=sppo
+REG_COEF=0.01
+# REG_COEF=0
 
-for i in $(seq 2 $iter_num); do
+for i in $(seq 1 $iter_num); do
     echo "Running Iter ${i}"
     if [ "$i" -eq 1 ]; then
         MODEL="mistralai/Mistral-7B-Instruct-v0.2"
@@ -13,7 +15,7 @@ for i in $(seq 2 $iter_num); do
     OUTPUT_DIR="checkpoints/${LOSS_TYPE}-${REG_COEF}-PromptA-Mistral-7B-Instruct-SPPO-Iter${i}"
     PROMPT="UCLA-AGI/data-mistral-7b-instruct-sppo-iter1"
     OUT="data-${LOSS_TYPE}-${REG_COEF}-promptA-mistral-7b-instruct-sppo-iter${i}"
-    DATASET_DIR="synthetic_data_${LOSS_TYPE}_${REG_COEF}_promptA-mistral-7b-instruct-sppo-iter${i}_score"
+    DATASET_DIR="synthetic_data_${LOSS_TYPE}-${REG_COEF}-promptA-mistral-7b-instruct-sppo-iter${i}_score"
 
     bash scripts/generate.sh --model $MODEL --prompt $PROMPT --out_path $OUT
     bash scripts/pipeline_reg.sh --model $MODEL --iter $i \

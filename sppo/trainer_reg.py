@@ -896,9 +896,9 @@ class SPPORegTrainer(Trainer):
         loss_l = (logits_l - (1 / self.beta)*(chosen_probs_lose - 0.5)) ** 2
         losses = (loss_w + loss_l)/2
         if self.loss_type == "sppo":
-            reg_loss = torch.tensor(0)
+            reg_loss = torch.tensor(0.)
         elif self.loss_type == "sppo_single":
-            reg_loss = torch.tensor(0)
+            reg_loss = torch.tensor(0.)
         elif self.loss_type == "sppo_forward_sft_win":
             reg_loss = - policy_chosen_logps.mean()  # loss for regularization
         elif self.loss_type == "sppo_forward_sft_all":
