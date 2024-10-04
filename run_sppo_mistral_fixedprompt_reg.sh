@@ -1,8 +1,9 @@
 #!/bin/bash
 iter_num=6
-LOSS_TYPE=sppo_reversekl
+LOSS_TYPE=sppo_forward_importance
+# LOSS_TYPE=sppo_reversekl
 # LOSS_TYPE=sppo
-REG_COEF=0.01
+REG_COEF=0.1
 # REG_COEF=0
 
 for i in $(seq 1 $iter_num); do

@@ -904,7 +904,7 @@ class SPPORegTrainer(Trainer):
         elif self.loss_type == "sppo_forward_sft_all":
             reg_loss = - policy_chosen_logps.mean() - policy_rejected_logps.mean()
         elif self.loss_type == "sppo_forward_importance":
-            reg_loss = (logits_diff_w).exp().mean() + (logits_diff_l).exp().mean()
+            reg_loss = (-logits_diff_w).exp().mean() + (-logits_diff_l).exp().mean()
         elif self.loss_type == "sppo_reversekl":
             reg_loss = (logits_diff_w ** 2).mean() + (logits_diff_l ** 2).mean()
         elif self.loss_type == "sppo_entropy":
