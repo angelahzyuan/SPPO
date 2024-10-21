@@ -6,6 +6,7 @@ import logging
 import random
 import sys
 import yaml
+from copy import deepcopy 
 
 import torch
 import transformers
@@ -194,6 +195,11 @@ def main_inner(model_args, data_args, training_args):
     tokenizer = get_tokenizer(model_args, data_args)
     raw_datasets = load_and_process_datasets(data_args, tokenizer)
 
+    if "forward" in training_args.loss_type:
+        sft_data_args = deepcopy(data_args)
+        sft_data_args.dataset_mixer = {'synthetic_data_mis7b-it-sppo-lora8-iter1_score': 1.0}
+        sft_dataset = load_and_process_datasets(sft_data_args, tokenizer)
+
     model, ref_model, model_kwargs, ref_model_kwargs = setup_model(model_args, training_args)
 
     trainer = SPPORegTrainer(
@@ -209,6 +215,7 @@ def main_inner(model_args, data_args, training_args):
         max_prompt_length=training_args.max_prompt_length,
         peft_config=get_peft_config(model_args),
         loss_type=training_args.loss_type,
+        sft_dataset=sft_dataset,
     )
 
     train_and_evaluate(trainer, raw_datasets, training_args)

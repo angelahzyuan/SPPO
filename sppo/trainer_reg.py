@@ -161,7 +161,9 @@ class SPPORegTrainer(Trainer):
         model_adapter_name: str = None,
         ref_adapter_name: str = None,
         reg_coef: float = 1,
+        sft_dataset: Optional[Dataset] = None,
     ):
+        self.sft_dataset = sft_dataset
         assert isinstance(model, str)
         self.last_iter_model = AutoModelForCausalLM.from_pretrained(model, **model_init_kwargs).eval()
         if model_init_kwargs is None:
@@ -857,6 +859,7 @@ class SPPORegTrainer(Trainer):
         chosen_probs_win: Union[torch.FloatTensor, None] = None,
         chosen_probs_lose: Union[torch.FloatTensor, None] = None,
         reference_free: bool = False,
+        model_logp_reference_responses: torch.FloatTensor = None,
     ) -> Tuple[torch.FloatTensor, torch.FloatTensor, torch.FloatTensor]:
         """Compute the SPPO loss for a batch of policy and reference model log probabilities.
 
@@ -899,12 +902,12 @@ class SPPORegTrainer(Trainer):
             reg_loss = torch.tensor(0)
         elif self.loss_type == "sppo_single":
             reg_loss = torch.tensor(0)
-        elif self.loss_type == "sppo_forward_sft_win":
-            reg_loss = - policy_chosen_logps.mean()  # loss for regularization
-        elif self.loss_type == "sppo_forward_sft_all":
-            reg_loss = - policy_chosen_logps.mean() - policy_rejected_logps.mean()
-        elif self.loss_type == "sppo_forward_importance":
-            reg_loss = (logits_diff_w).exp().mean() + (logits_diff_l).exp().mean()
+        # elif self.loss_type == "sppo_forward_sft_win":
+        #     reg_loss = - policy_chosen_logps.mean()  # loss for regularization
+        elif self.loss_type == "sppo_forward":
+            reg_loss = - model_logp_reference_responses.mean()
+        # elif self.loss_type == "sppo_forward_importance":
+        #     reg_loss = (logits_diff_w).exp().mean() + (logits_diff_l).exp().mean()
         elif self.loss_type == "sppo_reversekl":
             reg_loss = (logits_diff_w ** 2).mean() + (logits_diff_l ** 2).mean()
         elif self.loss_type == "sppo_entropy":
@@ -1055,6 +1058,27 @@ class SPPORegTrainer(Trainer):
                         _,
                         _,
                     ) = self.concatenated_forward(self.ref_model, batch)
+
+        if 'forward' in self.loss_type:
+            input_text = self.sft_dataset['train']['chosen']
+            tokenized = self.tokenizer(input_text, return_tensors="pt", padding=True, truncation=True)
+            input_ids = tokenized["input_ids"].to(self.model.device)
+            attention_mask = tokenized["attention_mask"].to(self.model.device)
+
+            model_logits_reference_responses = self.model(input_ids, attention_mask=attention_mask).logits 
+
+            # Shift the logits so that each token's prediction comes from the previous token
+            shifted_logits = model_logits_reference_responses[:, :-1, :].contiguous()
+            shifted_labels = input_ids[:, 1:].contiguous()
+
+            # Apply log softmax to get log-probabilities
+            log_probs = F.log_softmax(shifted_logits, dim=-1)
+
+            # Get the log-probabilities of the actual tokens in the response
+            model_logp_reference_responses = torch.gather(log_probs, dim=-1, index=shifted_labels.unsqueeze(-1)).squeeze(-1)
+
+            # Mask padding:
+            model_logp_reference_responses = model_logp_reference_responses * attention_mask[:, 1:]
 
         losses, chosen_rewards, rejected_rewards, reg_loss = self.sppo_loss(
             policy_chosen_logps,
