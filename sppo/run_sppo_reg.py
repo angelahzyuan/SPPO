@@ -215,6 +215,7 @@ def main_inner(model_args, data_args, training_args):
         max_prompt_length=training_args.max_prompt_length,
         peft_config=get_peft_config(model_args),
         loss_type=training_args.loss_type,
+        reg_coef=training_args.reg_coef,
         sft_dataset=sft_dataset,
     )
 
