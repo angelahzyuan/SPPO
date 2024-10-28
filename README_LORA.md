@@ -75,3 +75,14 @@ $ huggingface-cli login # Make sure you are using the key with 'write' permissio
 - Use the same virtual environment for running `alpaca_eval`. After configuring parameters, run `$ python3 test_alpacaeval.py`.
 - After the response is generated, run `alpaca_eval --model_outputs 'results_alpacaeval/NAME_FILE.json'` to evaluate the responses.
 	- Set OpenAI API key with `export OPENAI_API_KEY=YOUR_KEY`.
+
+## Evaluating Diversity of the Responses using `eval_selfbleu.py`
+- Parameters to configure
+    - USE_LORA
+	- path_llm: path where the checkpoint is stored
+	- name_file: name of `.json` file to be created
+    - **num_samples**: number of responses to generate per prompt
+	- parameters in `sampling_params` if necessary
+- This file requires `nltk` to be installed.
+- After configuring the parameters, run `$ python3 eval_selfbleu.py`. Find the created files in `results_selfbleu/`. 
+    
