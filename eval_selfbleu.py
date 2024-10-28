@@ -25,7 +25,6 @@ nltk.download("punkt_tab")
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
 os.environ['CUDA_VISIBLE_DEVICES'] = "0"
 
-
 # path_llm = None
 # path_llm = "meta-llama/Meta-Llama-3-8B-Instruct"
 # path_llm = "mistralai/Mistral-7B-Instruct-v0.2"
@@ -36,6 +35,7 @@ os.environ['CUDA_VISIBLE_DEVICES'] = "0"
 #path_llm = "checkpoints/Mis7B-It-SPPO-LoRA64-Iter1"
 # path_llm = "checkpoints/Mistral-7B-It-SPPO-LoRA8-Iter3"
 path_llm = "google/gemma-2b-it"
+
 USE_LORA = False
 name_file = "test0-selfbleu-gemma2bit"
 num_samples = 4 # number of responses per prompt for estimating diversity
@@ -170,8 +170,7 @@ sampling_params = SamplingParams(
     temperature=0.7,
     top_p=0.9,
     seed=2024,
-    max_tokens=128,
-    #max_tokens=64, # set it to higher value like 2048 for proper test
+    max_tokens=2048, # set it to higher value like 2048 for proper test
     n=num_samples
 )
 
